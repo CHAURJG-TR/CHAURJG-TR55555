@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="zh-TW">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>躲貓貓遊戲</title>
+  <script src="/_sdk/element_sdk.js"></script>
+  <style>
+    body {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: 'Microsoft JhengHei', 'PingFang TC', sans-serif;
+      overflow: hidden;
+    }
+    
+    html {
+      height: 100%;
+    }
+    
+    #game-container {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    
+    #header {
+      padding: 24px;
+      text-align: center;
+      z-index: 10;
+    }
+    
+    #title {
+      font-size: 36px;
+      font-weight: bold;
+      margin: 0 0 12px 0;
+    }
+    
+    #instructions {
+      font-size: 18px;
+      margin: 0;
+      opacity: 0.9;
+    }
+    
+    #score {
+      font-size: 20px;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+    
+    #game-stats {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 24px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+    
+    #timer, #attempts-counter {
+      font-size: 16px;
+      font-weight: 500;
+      padding: 8px 16px;
+      border-radius: 20px;
+      backdrop-filter: blur(10px);
+    }
+    
+    #hint-button {
+      font-size: 16px;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 20px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+    
+    #hint-button:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+    
+    #hint-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    #game-area {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .hiding-spot {
+      position: absolute;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+      user-select: none;
+    }
+    
+    .hiding-spot:hover {
+      transform: scale(1.1);
+    }
+    
+    .hiding-spot.found {
+      pointer-events: none;
+      opacity: 0.5;
+    }
+    
+    #win-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    
+    #win-screen.show {
+      display: flex;
+    }
+    
+    #win-content {
+      text-align: center;
+      padding: 48px;
+      border-radius: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    }
+    
+    #win-title {
+      font-size: 48px;
+      margin: 0 0 16px 0;
+    }
+    
+    #win-message {
+      font-size: 24px;
+      margin: 0 0 32px 0;
+    }
+    
+    #play-again {
+      font-size: 20px;
+      padding: 16px 32px;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+    
+    #play-again:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+    
+    .cat-emoji {
+      font-size: 48px;
+      display: inline-block;
+      animation: bounce 0.5s ease;
+    }
+    
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-20px); }
+    }
+    
+    .confetti {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      animation: fall 3s linear;
+      pointer-events: none;
+    }
+    
+    @keyframes fall {
+      to {
+        transform: translateY(100%) rotate(360deg);
+        opacity: 0;
+      }
+    }
+  </style>
+  <style>@view-transition { navigation: auto; }</style>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+  <script src="https://cdn.tailwindcss.com" type="text/javascript"></script>
+ </head>
+ <body>
+  <div id="game-container">
+   <div id="header">
+    <h1 id="title">🐱 躲貓貓遊戲 🐱</h1>
+    <p id="instructions">點擊物品找出隱藏的貓咪！</p>
+    <div id="score">
+     找到：<span id="found-count">0</span> / <span id="total-count">6</span>
+    </div>
+    <div id="game-stats">
+     <div id="timer">
+      ⏱️ 時間：<span id="time-display">00:00</span>
+     </div>
+     <div id="attempts-counter">
+      🎯 嘗試：<span id="attempts-count">0</span>
+     </div><button id="hint-button">💡 提示 (<span id="hints-left">2</span>)</button>
+    </div>
+   </div>
+   <div id="game-area"></div>
+   <div id="hint-message" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 16px 24px; border-radius: 12px; font-size: 18px; z-index: 50; max-width: 300px; text-align: center;"></div>
+   <div id="win-screen">
+    <div id="win-content">
+     <div id="win-title">
+      🎉
+     </div>
+     <p id="win-message">太棒了！你找到所有的貓咪了！</p><button id="play-again">再玩一次</button>
+    </div>
+   </div>
+  </div>
+  <script>
+    const defaultConfig = {
+      background_color: "#FFE5B4",
+      surface_color: "#FFFFFF",
+      text_color: "#2C3E50",
+      primary_action_color: "#FF6B9D",
+      secondary_action_color: "#95E1D3",
+      font_family: "Microsoft JhengHei",
+      font_size: 16,
+      game_title: "🐱 躲貓貓遊戲 🐱",
+      instruction_text: "點擊物品找出隱藏的貓咪！",
+      win_message: "太棒了！你找到所有的貓咪了！",
+      play_again_button: "再玩一次"
+    };
+
+    let foundCats = 0;
+    const totalCats = 6;
+    let gameStartTime = 0;
+    let gameTimer = null;
+    let attempts = 0;
+    let hintsUsed = 0;
+    let maxHints = 2;
+    
+    const hidingSpots = [
+      { emoji: "🌳", hasCat: true, hint: "樹木是貓咪最愛的藏身處！" },
+      { emoji: "🏠", hasCat: true, hint: "溫暖的家總是有貓咪的身影" },
+      { emoji: "📦", hasCat: true, hint: "貓咪最愛鑽進盒子裡" },
+      { emoji: "🌺", hasCat: false, hint: "只是美麗的花朵" },
+      { emoji: "🪴", hasCat: true, hint: "植物後面可能藏著小貓" },
+      { emoji: "🎁", hasCat: false, hint: "禮物盒是空的" },
+      { emoji: "🛋️", hasCat: true, hint: "沙發下是貓咪的秘密基地" },
+      { emoji: "🌻", hasCat: false, hint: "向日葵只會向著太陽" },
+      { emoji: "🪑", hasCat: false, hint: "椅子下面什麼都沒有" },
+      { emoji: "🌵", hasCat: false, hint: "仙人掌太刺了，貓咪不會躲這裡" },
+      { emoji: "🧸", hasCat: true, hint: "玩具熊是貓咪的好朋友" },
+      { emoji: "📚", hasCat: false, hint: "書本裡沒有貓咪" },
+      { emoji: "🎪", hasCat: false, hint: "帳篷是空的" },
+      { emoji: "🗑️", hasCat: false, hint: "垃圾桶裡什麼都沒有" },
+      { emoji: "🎨", hasCat: false, hint: "調色盤上只有顏料" }
+    ];
+
+    function shuffleArray(array) {
+      const newArray = [...array];
+      for (let i = newArray.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+      }
+      return newArray;
+    }
+
+    function createConfetti(x, y) {
+      const colors = ['#FF6B9D', '#95E1D3', '#FFD93D', '#6BCB77', '#4D96FF'];
+      for (let i = 0; i < 15; i++) {
+        const confetti = document.createElement('div');
+        confetti.className = 'confetti';
+        confetti.style.left = x + 'px';
+        confetti.style.top = y + 'px';
+        confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        confetti.style.animationDelay = (Math.random() * 0.3) + 's';
+        document.getElementById('game-area').appendChild(confetti);
+        
+        setTimeout(() => confetti.remove(), 3000);
+      }
+    }
+
+    function startTimer() {
+      gameStartTime = Date.now();
+      gameTimer = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
+        const minutes = Math.floor(elapsed / 60);
+        const seconds = elapsed % 60;
+        document.getElementById('time-display').textContent = 
+          `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      }, 1000);
+    }
+    
+    function stopTimer() {
+      if (gameTimer) {
+        clearInterval(gameTimer);
+        gameTimer = null;
+      }
+    }
+    
+    function showHint() {
+      if (hintsUsed >= maxHints) return;
+      
+      const availableSpots = document.querySelectorAll('.hiding-spot:not(.found)');
+      if (availableSpots.length === 0) return;
+      
+      const randomSpot = availableSpots[Math.floor(Math.random() * availableSpots.length)];
+      const spotData = randomSpot.spotData;
+      
+      const hintMessage = document.getElementById('hint-message');
+      hintMessage.textContent = spotData.hint;
+      hintMessage.style.display = 'block';
+      
+      randomSpot.style.animation = 'pulse 1s infinite';
+      
+      setTimeout(() => {
+        hintMessage.style.display = 'none';
+        randomSpot.style.animation = '';
+      }, 3000);
+      
+      hintsUsed++;
+      document.getElementById('hints-left').textContent = maxHints - hintsUsed;
+      
+      if (hintsUsed >= maxHints) {
+        document.getElementById('hint-button').disabled = true;
+      }
+    }
+    
+    function initGame() {
+      const gameArea = document.getElementById('game-area');
+      gameArea.innerHTML = '';
+      foundCats = 0;
+      attempts = 0;
+      hintsUsed = 0;
+      
+      document.getElementById('found-count').textContent = foundCats;
+      document.getElementById('attempts-count').textContent = attempts;
+      document.getElementById('hints-left').textContent = maxHints;
+      document.getElementById('hint-button').disabled = false;
+      document.getElementById('win-screen').classList.remove('show');
+      document.getElementById('time-display').textContent = '00:00';
+      
+      stopTimer();
+      
+      const shuffled = shuffleArray(hidingSpots);
+      
+      shuffled.forEach((spot, index) => {
+        const spotElement = document.createElement('div');
+        spotElement.className = 'hiding-spot';
+        spotElement.innerHTML = spot.emoji;
+        spotElement.style.fontSize = '64px';
+        spotElement.style.left = (8 + (index % 5) * 18) + '%';
+        spotElement.style.top = (15 + Math.floor(index / 5) * 25) + '%';
+        spotElement.spotData = spot;
+        
+        spotElement.addEventListener('click', function() {
+          if (this.classList.contains('found')) return;
+          
+          if (attempts === 0) {
+            startTimer();
+          }
+          
+          attempts++;
+          document.getElementById('attempts-count').textContent = attempts;
+          
+          if (spot.hasCat) {
+            const catEmoji = document.createElement('span');
+            catEmoji.className = 'cat-emoji';
+            catEmoji.textContent = '😺';
+            catEmoji.style.position = 'absolute';
+            catEmoji.style.left = '50%';
+            catEmoji.style.top = '50%';
+            catEmoji.style.transform = 'translate(-50%, -50%)';
+            this.appendChild(catEmoji);
+            
+            this.classList.add('found');
+            foundCats++;
+            document.getElementById('found-count').textContent = foundCats;
+            
+            const rect = this.getBoundingClientRect();
+            createConfetti(rect.left + rect.width / 2, rect.top + rect.height / 2);
+            
+            if (foundCats === totalCats) {
+              stopTimer();
+              const finalTime = document.getElementById('time-display').textContent;
+              document.getElementById('win-message').innerHTML = 
+                `🎉 太棒了！你找到所有的貓咪了！<br>⏱️ 用時：${finalTime}<br>🎯 嘗試次數：${attempts}`;
+              setTimeout(() => {
+                document.getElementById('win-screen').classList.add('show');
+              }, 500);
+            }
+          } else {
+            this.style.animation = 'shake 0.5s';
+            setTimeout(() => {
+              this.style.animation = '';
+            }, 500);
+          }
+        });
+        
+        gameArea.appendChild(spotElement);
+      });
+    }
+
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-10px); }
+        75% { transform: translateX(10px); }
+      }
+      
+      @keyframes pulse {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.1); opacity: 0.8; }
+      }
+      
+      @keyframes glow {
+        0%, 100% { box-shadow: 0 0 5px rgba(255, 107, 157, 0.5); }
+        50% { box-shadow: 0 0 20px rgba(255, 107, 157, 0.8); }
+      }
+    `;
+    document.head.appendChild(style);
+
+    document.getElementById('play-again').addEventListener('click', initGame);
+    document.getElementById('hint-button').addEventListener('click', showHint);
+
+    async function onConfigChange(config) {
+      const customFont = config.font_family || defaultConfig.font_family;
+      const baseFontStack = 'Microsoft JhengHei, PingFang TC, sans-serif';
+      const baseSize = config.font_size || defaultConfig.font_size;
+      
+      document.body.style.fontFamily = `${customFont}, ${baseFontStack}`;
+      document.body.style.backgroundColor = config.background_color || defaultConfig.background_color;
+      
+      document.getElementById('game-container').style.color = config.text_color || defaultConfig.text_color;
+      
+      document.getElementById('title').textContent = config.game_title || defaultConfig.game_title;
+      document.getElementById('title').style.fontSize = `${baseSize * 2.25}px`;
+      document.getElementById('title').style.color = config.text_color || defaultConfig.text_color;
+      
+      document.getElementById('instructions').textContent = config.instruction_text || defaultConfig.instruction_text;
+      document.getElementById('instructions').style.fontSize = `${baseSize * 1.125}px`;
+      document.getElementById('instructions').style.color = config.text_color || defaultConfig.text_color;
+      
+      document.getElementById('score').style.fontSize = `${baseSize * 1.25}px`;
+      document.getElementById('score').style.color = config.text_color || defaultConfig.text_color;
+      
+      const gameStats = document.getElementById('game-stats');
+      const timer = document.getElementById('timer');
+      const attemptsCounter = document.getElementById('attempts-counter');
+      const hintButton = document.getElementById('hint-button');
+      
+      timer.style.backgroundColor = config.secondary_action_color || defaultConfig.secondary_action_color;
+      timer.style.color = config.text_color || defaultConfig.text_color;
+      timer.style.fontSize = `${baseSize}px`;
+      
+      attemptsCounter.style.backgroundColor = config.secondary_action_color || defaultConfig.secondary_action_color;
+      attemptsCounter.style.color = config.text_color || defaultConfig.text_color;
+      attemptsCounter.style.fontSize = `${baseSize}px`;
+      
+      hintButton.style.backgroundColor = config.primary_action_color || defaultConfig.primary_action_color;
+      hintButton.style.color = config.surface_color || defaultConfig.surface_color;
+      hintButton.style.fontSize = `${baseSize}px`;
+      
+      document.getElementById('win-content').style.backgroundColor = config.surface_color || defaultConfig.surface_color;
+      
+      document.getElementById('win-title').style.fontSize = `${baseSize * 3}px`;
+      
+      document.getElementById('win-message').textContent = config.win_message || defaultConfig.win_message;
+      document.getElementById('win-message').style.fontSize = `${baseSize * 1.5}px`;
+      document.getElementById('win-message').style.color = config.text_color || defaultConfig.text_color;
+      
+      const playAgainBtn = document.getElementById('play-again');
+      playAgainBtn.textContent = config.play_again_button || defaultConfig.play_again_button;
+      playAgainBtn.style.fontSize = `${baseSize * 1.25}px`;
+      playAgainBtn.style.backgroundColor = config.primary_action_color || defaultConfig.primary_action_color;
+      playAgainBtn.style.color = config.surface_color || defaultConfig.surface_color;
+    }
+
+    if (window.elementSdk) {
+      window.elementSdk.init({
+        defaultConfig,
+        onConfigChange,
+        mapToCapabilities: (config) => ({
+          recolorables: [
+            {
+              get: () => config.background_color || defaultConfig.background_color,
+              set: (value) => {
+                config.background_color = value;
+                window.elementSdk.setConfig({ background_color: value });
+              }
+            },
+            {
+              get: () => config.surface_color || defaultConfig.surface_color,
+              set: (value) => {
+                config.surface_color = value;
+                window.elementSdk.setConfig({ surface_color: value });
+              }
+            },
+            {
+              get: () => config.text_color || defaultConfig.text_color,
+              set: (value) => {
+                config.text_color = value;
+                window.elementSdk.setConfig({ text_color: value });
+              }
+            },
+            {
+              get: () => config.primary_action_color || defaultConfig.primary_action_color,
+              set: (value) => {
+                config.primary_action_color = value;
+                window.elementSdk.setConfig({ primary_action_color: value });
+              }
+            },
+            {
+              get: () => config.secondary_action_color || defaultConfig.secondary_action_color,
+              set: (value) => {
+                config.secondary_action_color = value;
+                window.elementSdk.setConfig({ secondary_action_color: value });
+              }
+            }
+          ],
+          borderables: [],
+          fontEditable: {
+            get: () => config.font_family || defaultConfig.font_family,
+            set: (value) => {
+              config.font_family = value;
+              window.elementSdk.setConfig({ font_family: value });
+            }
+          },
+          fontSizeable: {
+            get: () => config.font_size || defaultConfig.font_size,
+            set: (value) => {
+              config.font_size = value;
+              window.elementSdk.setConfig({ font_size: value });
+            }
+          }
+        }),
+        mapToEditPanelValues: (config) => new Map([
+          ["game_title", config.game_title || defaultConfig.game_title],
+          ["instruction_text", config.instruction_text || defaultConfig.instruction_text],
+          ["win_message", config.win_message || defaultConfig.win_message],
+          ["play_again_button", config.play_again_button || defaultConfig.play_again_button]
+        ])
+      });
+    }
+
+    initGame();
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'99a21eca50794a01',t:'MTc2MjQwNjIwMi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
